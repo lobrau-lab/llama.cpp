@@ -10,15 +10,16 @@
 #include <string_view>
 
 // TODO?: Make this reusable, enums, docs
-static const std::array<std::string_view, 8> cmds = {
-    "/audio ",
-    "/clear",
-    "/exit",
-    "/glob ",
-    "/image ",
-    "/read ",
-    "/regen",
-    "/video ",
+static const std::array<std::string_view, 9> cmds = {
+    "/R",
+    "/a ",
+    "/c",
+    "/e",
+    "/g ",
+    "/i ",
+    "/r ",
+    "/t ",
+    "/v ",
 };
 
 static std::vector<std::pair<std::string, size_t>> auto_completion_callback(std::string_view line, size_t cursor_byte_pos) {

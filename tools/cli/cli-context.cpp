@@ -439,20 +439,21 @@ int cli_context::run() {
     }
     banner += "\n";
     banner += "available commands:\n";
-    banner += "  /exit or Ctrl+C     stop or exit\n";
-    banner += "  /regen              regenerate the last response\n";
-    banner += "  /clear              clear the chat history\n";
-    banner += "  /read <file>        add a text file\n";
-    banner += "  /glob <pattern>     add text files using globbing pattern\n";
+    banner += "  /e or Ctrl+C        stop or exit\n";
+    banner += "  /R                  regenerate the last response\n";
+    banner += "  /c                  clear the chat history\n";
+    banner += "  /r <file>           add a text file\n";
+    banner += "  /g <pattern>        add text files using globbing pattern\n";
     if (has_vision) {
-        banner += "  /image <file>       add an image file\n";
+        banner += "  /i <file>           add an image file\n";
     }
     if (has_audio) {
-        banner += "  /audio <file>       add an audio file\n";
+        banner += "  /a <file>           add an audio file\n";
     }
     if (has_video) {
-        banner += "  /video <file>       add a video file\n";
+        banner += "  /v <file>           add a video file\n";
     }
+    banner += "  /t <tool> <args>    call a tool (e.g. /t read_file {\"path\": \"...\"})\n";
     banner += "\n";
 
     ui::show_message(banner);
@@ -520,9 +521,9 @@ int cli_context::run() {
         bool add_user_msg = true;
 
         // process commands
-        if (string_starts_with(buffer, "/exit")) {
+        if (buffer == "/e" || string_starts_with(buffer, "/e ")) {
             break;
-        } else if (string_starts_with(buffer, "/regen")) {
+        } else if (buffer == "/R" || string_starts_with(buffer, "/R ")) {
             if (impl->messages.size() >= 2) {
                 size_t last_idx = impl->messages.size() - 1;
                 impl->messages.erase(last_idx);
@@ -531,7 +532,7 @@ int cli_context::run() {
                 ui::show_error("No message to regenerate.");
                 continue;
             }
-        } else if (string_starts_with(buffer, "/clear")) {
+        } else if (buffer == "/c" || string_starts_with(buffer, "/c ")) {
             impl->messages.clear();
             add_system_prompt();
 
@@ -539,12 +540,16 @@ int cli_context::run() {
             ui::show_message("Chat history cleared.");
             continue;
         } else if (
-                (string_starts_with(buffer, "/image ") && has_vision) ||
-                (string_starts_with(buffer, "/audio ") && has_audio) ||
-                (string_starts_with(buffer, "/video ") && has_video)) {
-            std::string type = buffer.substr(1, 5);
+                (string_starts_with(buffer, "/i ") && has_vision) ||
+                (string_starts_with(buffer, "/a ") && has_audio) ||
+                (string_starts_with(buffer, "/v ") && has_video)) {
+            std::string type = "";
+            if (buffer[1] == 'i') type = "image";
+            else if (buffer[1] == 'a') type = "audio";
+            else if (buffer[1] == 'v') type = "video";
+
             // just in case (bad copy-paste for example), we strip all trailing/leading spaces
-            std::string fname = string_strip(buffer.substr(7));
+            std::string fname = string_strip(buffer.substr(3));
             if (!stage_media_file(fname, type)) {
                 ui::show_error(string_format("file does not exist or cannot be opened: '%s'", fname.c_str()));
                 continue;
@@ -552,16 +557,16 @@ int cli_context::run() {
             ui::show_message(string_format("Loaded media from '%s'", fname.c_str()));
             write_output_file(string_format("User: Added media: %s\n", fname.c_str()));
             continue;
-        } else if (string_starts_with(buffer, "/read ")) {
-            std::string fname = string_strip(buffer.substr(6));
+        } else if (string_starts_with(buffer, "/r ")) {
+            std::string fname = string_strip(buffer.substr(3));
             add_text_file(fname);
             write_output_file(string_format("User: Added text file: %s\n", fname.c_str()));
             continue;
-        } else if (string_starts_with(buffer, "/glob ")) {
+        } else if (string_starts_with(buffer, "/g ")) {
             std::error_code ec;
             size_t count = 0;
             auto curdir = std::filesystem::current_path();
-            std::string pattern = string_strip(buffer.substr(6));
+            std::string pattern = string_strip(buffer.substr(3));
             std::filesystem::path rel_path;
 
             auto startglob = pattern.find_first_of("![*?");
@@ -610,6 +615,41 @@ int cli_context::run() {
                     ui::show_error(string_format("Maximum number of globbed files allowed (%zu) reached.", FILE_GLOB_MAX_RESULTS));
                     break;
                 }
+            }
+            continue;
+        } else if (string_starts_with(buffer, "/t ")) {
+            std::string payload = string_strip(buffer.substr(3));
+            size_t space_pos = payload.find(' ');
+            if (space_pos != std::string::npos) {
+                std::string tool_name = payload.substr(0, space_pos);
+                std::string tool_args = string_strip(payload.substr(space_pos + 1));
+
+                json tool_params;
+                try {
+                    tool_params = json::parse(tool_args);
+                } catch (...) {
+                    ui::show_error("Invalid JSON arguments");
+                    continue;
+                }
+
+                json req = {
+                    {"tool", tool_name},
+                    {"params", tool_params}
+                };
+
+                try {
+                    std::string res = client.post("/tools", req.dump());
+                    ui::show_message(string_format("Tool response:\n%s", res.c_str()));
+
+                    cur_msg += "\n--- Tool execution: " + tool_name + " ---\n";
+                    cur_msg += "Args: " + tool_args + "\n";
+                    cur_msg += "Result: \n" + res + "\n";
+                    write_output_file(string_format("User: Called tool '%s' with args %s\nResult: %s\n\n", tool_name.c_str(), tool_args.c_str(), res.c_str()));
+                } catch (const std::exception & e) {
+                    ui::show_error(string_format("Tool call failed: %s", e.what()));
+                }
+            } else {
+                ui::show_error("Usage: /t <tool> <args>");
             }
             continue;
         } else {
