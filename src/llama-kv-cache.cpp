@@ -1049,7 +1049,7 @@ llama_kv_cache::slot_info llama_kv_cache::find_slot(const llama_ubatch & ubatch,
                         const llama_seq_id seq_id_cell = cells.seq_get(idx);
 
                         // SWA mask
-                        if (llama_hparams::is_masked_swa(n_swa, swa_type, pos_cell, cells.seq_pos_max(seq_id_cell) + 1)) {
+                        if (llama_swa_params{n_swa, swa_type}.is_masked(pos_cell, cells.seq_pos_max(seq_id_cell) + 1)) {
                             can_use = true;
                         }
                     }
@@ -1673,7 +1673,7 @@ static void set_input_kq_mask_impl(const args_set_input_kq_mask & args, T * data
                 if (swa) {
                     // see llama_non_causal_type
                     const bool in_span = !causal && args.hparams.non_causal_type == LLAMA_NON_CAUSAL_TYPE_SWA_FULL && p0 >= seq_pos_min[seq_id];
-                    if (!in_span && llama_hparams::is_masked_swa(n_swa, swa_type, p0, p1)) {
+                    if (!in_span && llama_swa_params{n_swa, swa_type}.is_masked(p0, p1)) {
                         goto skip;
                     }
                 }
@@ -2077,7 +2077,7 @@ void llama_kv_cache::state_write(llama_io_write_i & io, llama_seq_id seq_id, lla
 
             // check the cell is not SWA-masked
             if (add_cell && seq_id != -1) {
-                const bool is_masked = llama_hparams::is_masked_swa(n_swa, swa_type, cells.pos_get(i), cells.seq_pos_max(seq_id));
+                const bool is_masked = llama_swa_params{n_swa, swa_type}.is_masked(cells.pos_get(i), cells.seq_pos_max(seq_id));
 
                 add_cell = !is_masked;
             }

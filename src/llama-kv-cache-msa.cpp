@@ -385,7 +385,7 @@ void llama_kv_cache_msa_context::set_input_pos_mask(ggml_tensor * dst, const lla
             }
 
             // apply SWA if any
-            if (llama_hparams::is_masked_swa(n_swa, swa_type, p0, p1)) {
+            if (llama_swa_params{n_swa, swa_type}.is_masked(p0, p1)) {
                 continue;
             }
 
