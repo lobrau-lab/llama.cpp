@@ -1060,16 +1060,10 @@ common_chat_prompt common_chat_template_direct_apply_impl(
         inp["tools"] = tools_override.has_value() ? *tools_override : inputs.tools;
     }
     if (inputs.extra_context.is_object()) {
-        // TODO: do we need to merge, or replacing is fine?
-        for (const auto & [k, v] : inputs.extra_context.items()) {
-            inp[k] = v;
-        }
+        inp.update(inputs.extra_context, true);
     }
-    if (additional_context.has_value()) {
-        // TODO: merge properly instead of overwriting (matching old behavior)
-        for (const auto & [k, v] : additional_context->items()) {
-            inp[k] = v;
-        }
+    if (additional_context.has_value() && additional_context->is_object()) {
+        inp.update(*additional_context, true);
     }
     if (inputs.add_generation_prompt) {
         inp["add_generation_prompt"] = true;

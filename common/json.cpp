@@ -431,3 +431,9 @@ common_json::operator std::string() const {
 std::string common_json::value(const std::string & key, const char * def) const {
     return contains(key) ? at(key).get<std::string>() : std::string(def);
 }
+
+void common_json::update(const common_json & obj, bool merge_objects) {
+    guard([&]() {
+        as_json(this).update(as_json(&obj), merge_objects);
+    });
+}

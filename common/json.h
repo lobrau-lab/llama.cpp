@@ -252,6 +252,9 @@ class common_json {
     // appends every value of another array; inserting an array into itself throws
     void insert(const common_json & vals);
 
+    // updates a JSON object from another object, overwriting existing keys
+    void update(const common_json & obj, bool merge_objects = false);
+
     // a common_json goes through the copy assignment above, everything else becomes a value
     template <typename T, typename std::enable_if<!std::is_same<typename std::decay<T>::type, common_json>::value, int>::type = 0>
     common_json & operator=(T && val) {
