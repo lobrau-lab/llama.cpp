@@ -28,6 +28,48 @@ enum llama_swa_type {
     LLAMA_SWA_TYPE_SYMMETRIC = 3,
 };
 
+struct llama_swa_params {
+    uint32_t       n_swa;
+    llama_swa_type type;
+
+    // note: inlined on purpose for performance reasons
+    bool is_masked(llama_pos p0, llama_pos p1) const {
+        assert(p0 >= 0 && p1 >= 0);
+
+        switch (type) {
+            case LLAMA_SWA_TYPE_NONE:
+                {
+                } break;
+            case LLAMA_SWA_TYPE_STANDARD:
+                {
+                    if (p1 - p0 >= (int32_t) n_swa) {
+                        return true;
+                    }
+                } break;
+            case LLAMA_SWA_TYPE_CHUNKED:
+                {
+                    const llama_pos pos_chunk_start = (p1 / n_swa) * n_swa;
+
+                    if (p0 < pos_chunk_start) {
+                        return true;
+                    }
+                } break;
+            case LLAMA_SWA_TYPE_SYMMETRIC:
+                {
+                    const int32_t half_n_swa = (int32_t) n_swa / 2;
+                    const int32_t pos_diff = p1 - p0;
+
+                    // Mask if outside the symmetric window
+                    if (pos_diff < -half_n_swa || pos_diff > half_n_swa) {
+                        return true;
+                    }
+                } break;
+        }
+
+        return false;
+    }
+};
+
 // how the non-causal mask should be constructed with llama_set_causal_attn(ctx, false)
 // (e.g. mtmd decoding image tokens)
 enum llama_non_causal_type {
@@ -513,45 +555,6 @@ struct llama_hparams {
     // number of effective layers (excludes nextn layers)
     uint32_t n_layer() const;
 
-    // note that this function uses different SWA parameters from those in the hparams
-    // note: inlined on purpose for performance reasons
-    // TODO: think of a better place for this function
-    // TODO: pack the SWA params in a struct?
-    static bool is_masked_swa(uint32_t n_swa, llama_swa_type swa_type, llama_pos p0, llama_pos p1) {
-        assert(p0 >= 0 && p1 >= 0);
-
-        switch (swa_type) {
-            case LLAMA_SWA_TYPE_NONE:
-                {
-                } break;
-            case LLAMA_SWA_TYPE_STANDARD:
-                {
-                    if (p1 - p0 >= (int32_t) n_swa) {
-                        return true;
-                    }
-                } break;
-            case LLAMA_SWA_TYPE_CHUNKED:
-                {
-                    const llama_pos pos_chunk_start = (p1 / n_swa) * n_swa;
-
-                    if (p0 < pos_chunk_start) {
-                        return true;
-                    }
-                } break;
-            case LLAMA_SWA_TYPE_SYMMETRIC:
-                {
-                    const int32_t half_n_swa = (int32_t) n_swa / 2;
-                    const int32_t pos_diff = p1 - p0;
-
-                    // Mask if outside the symmetric window
-                    if (pos_diff < -half_n_swa || pos_diff > half_n_swa) {
-                        return true;
-                    }
-                } break;
-        }
-
-        return false;
-    }
 
 
     bool use_mrope() const;
