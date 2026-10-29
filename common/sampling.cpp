@@ -170,6 +170,7 @@ struct common_sampler {
     }
 
     mutable int64_t t_total_us = 0;
+    mutable int64_t t_grammar_us = 0;
 };
 
 std::string common_params_sampling::print() const {
@@ -492,6 +493,7 @@ void common_sampler_accept(struct common_sampler * gsmpl, llama_token token, boo
             const llama_tokens * end_seq = common_reasoning_budget_get_end_match(gsmpl->rbudget);
             if (end_seq) {
                 for (const llama_token end_token : *end_seq) {
+                    common_time_meas tm(gsmpl->t_grammar_us, gsmpl->params.no_perf);
                     llama_sampler_accept(gsmpl->grmr, end_token);
                 }
             }
@@ -499,6 +501,7 @@ void common_sampler_accept(struct common_sampler * gsmpl, llama_token token, boo
     }
 
     if (gsmpl->grmr && accept_grammar) {
+        common_time_meas tm(gsmpl->t_grammar_us, gsmpl->params.no_perf);
         llama_sampler_accept(gsmpl->grmr, token);
     }
 
@@ -547,11 +550,11 @@ void common_sampler_copy(const common_sampler * src, common_sampler * dst) {
     dst->cur_p.data = src->cur_p.data ? dst->cur.data() : nullptr; // re-point to dst's buffer
     dst->rng        = src->rng;
     dst->t_total_us = src->t_total_us;
+    dst->t_grammar_us = src->t_grammar_us;
 }
 
 void common_perf_print(const struct llama_context * ctx, const struct common_sampler * gsmpl) {
-    // TODO: measure grammar performance
-
+    const double t_grammar_ms = gsmpl ? 1e-3*gsmpl->t_grammar_us : 0;
     const double t_sampling_ms = gsmpl ? 1e-3*gsmpl->t_total_us : 0;
 
     llama_perf_sampler_data data_smpl;
@@ -568,6 +571,10 @@ void common_perf_print(const struct llama_context * ctx, const struct common_sam
         // note: the sampling time includes the samplers time + extra time spent in common/sampling
         LOG_INF("%s:    sampling time = %10.2f ms\n", __func__, t_sampling_ms);
         LOG_INF("%s:    samplers time = %10.2f ms / %5d tokens\n", __func__, data.t_sample_ms, data.n_sample);
+
+        if (t_grammar_ms > 0) {
+            LOG_INF("%s:    grammar time  = %10.2f ms\n", __func__, t_grammar_ms);
+        }
     }
 
     if (ctx) {
@@ -644,6 +651,7 @@ llama_token common_sampler_sample(struct common_sampler * gsmpl, struct llama_co
     llama_sampler_apply(rbudget, &cur_p);
 
     if (grammar_first && grammar_should_apply(gsmpl)) {
+        common_time_meas tm(gsmpl->t_grammar_us, gsmpl->params.no_perf);
         llama_sampler_apply(grmr, &cur_p);
     }
 
@@ -660,7 +668,10 @@ llama_token common_sampler_sample(struct common_sampler * gsmpl, struct llama_co
         llama_token_data       single_token_data       = { id, 1.0f, 0.0f };
         llama_token_data_array single_token_data_array = { &single_token_data, 1, -1, false };
 
-        llama_sampler_apply(grmr, &single_token_data_array);
+        {
+            common_time_meas tm(gsmpl->t_grammar_us, gsmpl->params.no_perf);
+            llama_sampler_apply(grmr, &single_token_data_array);
+        }
 
         const bool is_valid = single_token_data_array.data[0].logit != -INFINITY;
         if (is_valid) {
@@ -675,6 +686,7 @@ llama_token common_sampler_sample(struct common_sampler * gsmpl, struct llama_co
     llama_sampler_apply(rbudget,  &cur_p);
 
     if (grammar_should_apply(gsmpl)) {
+        common_time_meas tm(gsmpl->t_grammar_us, gsmpl->params.no_perf);
         llama_sampler_apply(grmr,  &cur_p);
     }
 
@@ -759,6 +771,7 @@ std::vector<llama_token> common_sampler_sample_and_accept_n_rejection(struct com
         if (masked) {
             cand.assign(cur_p->data, cur_p->data + cur_p->size);
             llama_token_data_array arr = { cand.data(), cand.size(), -1, false };
+            common_time_meas tm(gsmpl->t_grammar_us, gsmpl->params.no_perf);
             llama_sampler_apply(gsmpl->grmr, &arr);
         }
 
