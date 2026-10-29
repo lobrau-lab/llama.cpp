@@ -29,8 +29,6 @@
 // For convenience, the common_sampler also maintains a container with the current candidate tokens.
 // This can be used to access the probabilities of the rest of the non-sampled tokens.
 //
-// TODO: measure grammar performance
-//
 
 struct common_sampler;
 
