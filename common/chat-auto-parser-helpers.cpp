@@ -84,6 +84,19 @@ static size_t common_suffix_len(const std::string & left, const std::string & ri
 diff_split calculate_diff_split(const std::string & left, const std::string & right) {
     diff_split result;
 
+    // When left has no unique content (result.left is empty), left is entirely
+    // shared with right. The simultaneous prefix/suffix segment matching can
+    // incorrectly consume trailing segments of left as suffix when those same
+    // segments also appear at the end of right (e.g. "\n" at the end of both
+    // the shared content and the generation prompt). This rotates the diff.
+    // Fix: if left is a prefix of right, enforce that directly.
+    if (left.size() <= right.size() && right.compare(0, left.size(), left) == 0) {
+        result.prefix = left;
+        result.suffix = "";
+        result.right = right.substr(left.size());
+        return result;
+    }
+
     auto left_seg = segmentize_markers(left);
     auto right_seg = segmentize_markers(right);
 
@@ -184,20 +197,6 @@ diff_split calculate_diff_split(const std::string & left, const std::string & ri
         result.prefix = left;
         result.suffix = "";
         // pick prefix = all as representation
-    }
-
-    // When left has no unique content (result.left is empty), left is entirely
-    // shared with right. The simultaneous prefix/suffix segment matching can
-    // incorrectly consume trailing segments of left as suffix when those same
-    // segments also appear at the end of right (e.g. "\n" at the end of both
-    // the shared content and the generation prompt). This rotates the diff.
-    // Fix: if left is a prefix of right, enforce that directly.
-    if (result.left.empty() && !result.right.empty() &&
-            left.size() <= right.size() &&
-            right.substr(0, left.size()) == left) {
-        result.prefix = left;
-        result.suffix = "";
-        result.right  = right.substr(left.size());
     }
 
     return result;
