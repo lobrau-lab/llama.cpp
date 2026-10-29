@@ -52,7 +52,6 @@ Instructions:
 - The convert_hf_to_gguf.py script will have had its get_vocab_base_pre() function updated
 - Update llama.cpp with the new pre-tokenizer if necessary
 """
-# TODO: generate tokenizer tests for llama.cpp
 
 parser = argparse.ArgumentParser(description=DOC_STRING, formatter_class=argparse.RawTextHelpFormatter)
 parser.add_argument(
@@ -517,3 +516,35 @@ for model in models:
     print(f"python3 convert_hf_to_gguf.py models/tokenizers/{name}/ --outfile models/ggml-vocab-{name}.gguf --vocab-only") # noqa: NP100
 
 logger.info("\n")
+
+
+
+
+
+# update tests/CMakeLists.txt
+cmake_pth = pathlib.Path("tests/CMakeLists.txt")
+if cmake_pth.exists():
+    cmake = cmake_pth.read_text(encoding="utf-8")
+
+    src_cmake = ""
+    for model in sorted(all_models, key=lambda x: x["name"]):
+        name = model["name"]
+
+        # Only add test if we actually generated the vocab file
+        if not os.path.exists(f"models/ggml-vocab-{name}.gguf"):
+            continue
+
+        args = f"${{PROJECT_SOURCE_DIR}}/models/ggml-vocab-{name}.gguf"
+        if name == "gemma-4":
+            args += " --check-decode"
+        src_cmake += f"llama_test(test-tokenizer-0 NAME test-tokenizer-0-{name:<16} LABEL behavior  ARGS {args})\n"
+
+    cmake = re.sub(
+        r"(# Marker: Start test-tokenizer-0\n)(.*?)(# Marker: End test-tokenizer-0)",
+        lambda m: m.group(1) + src_cmake + m.group(3),
+        cmake,
+        flags=re.DOTALL | re.MULTILINE,
+    )
+
+    cmake_pth.write_text(cmake, encoding="utf-8")
+    logger.info(f"+++ {cmake_pth} was updated")
