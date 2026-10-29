@@ -103,6 +103,10 @@ models = [
     {"name": "cohere2moe",       "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/CohereLabs/North-Mini-Code-1.0", },
     {"name": "flint",            "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/RecursiveSI/flint", },
     {"name": "qwen2",            "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/Qwen/Qwen1.5-7B", },
+    {"name": "qwen2-72b",        "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/Qwen/Qwen2.5-72B", },
+    {"name": "llama-3.2",        "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/unsloth/Llama-3.2-1B", },
+    {"name": "mistral-v0.3",     "tokt": TOKENIZER_TYPE.SPM, "repo": "https://huggingface.co/mistralai/Mistral-7B-v0.3", },
+    {"name": "gemma-2-27b",      "tokt": TOKENIZER_TYPE.SPM, "repo": "https://huggingface.co/google/gemma-2-27b", },
     {"name": "olmo",             "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/allenai/OLMo-1.7-7B-hf", },
     {"name": "dbrx",             "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/databricks/dbrx-base", },
     {"name": "jina-v1-en",       "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/jinaai/jina-reranker-v1-tiny-en", },
@@ -481,7 +485,7 @@ for model in models:
             tokenizer = AutoTokenizer.from_pretrained(f"models/tokenizers/{name}", use_fast=False)
         else:
             tokenizer = AutoTokenizer.from_pretrained(f"models/tokenizers/{name}")
-    except (OSError, TypeError) as e:
+    except (OSError, TypeError, ValueError) as e:
         logger.error(f"Failed to load tokenizer for model {name}. Error: {e}")
         continue  # Skip this model and continue with the next one in the loop
 
