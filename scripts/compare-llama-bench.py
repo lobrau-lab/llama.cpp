@@ -462,16 +462,22 @@ class LlamaBenchDataJSONL(LlamaBenchDataSQLite3):
         db_fields = LLAMA_BENCH_DB_FIELDS if tool == "llama-bench" else TEST_BACKEND_OPS_DB_FIELDS
 
         with open(data_file, "r", encoding="utf-8") as fp:
-            for i, line in enumerate(fp):
-                parsed = json.loads(line)
+            def row_generator():
+                for i, line in enumerate(fp):
+                    parsed = json.loads(line)
 
-                for k in parsed.keys() - set(db_fields):
-                    del parsed[k]
+                    for k in parsed.keys() - set(db_fields):
+                        del parsed[k]
 
-                if (missing_keys := self._check_keys(parsed.keys())):
-                    raise RuntimeError(f"Missing required data key(s) at line {i + 1}: {', '.join(missing_keys)}")
+                    if (missing_keys := self._check_keys(parsed.keys())):
+                        raise RuntimeError(f"Missing required data key(s) at line {i + 1}: {', '.join(missing_keys)}")
+                    yield parsed
 
-                self.cursor.execute(f"INSERT INTO {self.table_name}({', '.join(parsed.keys())}) VALUES({', '.join('?' * len(parsed))});", tuple(parsed.values()))
+            rows = list(row_generator())
+            if rows:
+                final_keys = list(rows[0].keys())
+                query = f"INSERT INTO {self.table_name}({', '.join(final_keys)}) VALUES({', '.join('?' * len(final_keys))});"
+                self.cursor.executemany(query, [tuple(row[k] for k in final_keys) for row in rows])
 
         self._builds_init()
 
@@ -500,14 +506,17 @@ class LlamaBenchDataJSON(LlamaBenchDataSQLite3):
             with open(data_file, "r", encoding="utf-8") as fp:
                 parsed = json.load(fp)
 
-                for i, entry in enumerate(parsed):
-                    for k in entry.keys() - set(db_fields):
-                        del entry[k]
+                if parsed:
+                    for i, entry in enumerate(parsed):
+                        for k in entry.keys() - set(db_fields):
+                            del entry[k]
 
-                    if (missing_keys := self._check_keys(entry.keys())):
-                        raise RuntimeError(f"Missing required data key(s) at entry {i + 1}: {', '.join(missing_keys)}")
+                        if (missing_keys := self._check_keys(entry.keys())):
+                            raise RuntimeError(f"Missing required data key(s) at entry {i + 1}: {', '.join(missing_keys)}")
 
-                    self.cursor.execute(f"INSERT INTO {self.table_name}({', '.join(entry.keys())}) VALUES({', '.join('?' * len(entry))});", tuple(entry.values()))
+                    final_keys = list(parsed[0].keys())
+                    query = f"INSERT INTO {self.table_name}({', '.join(final_keys)}) VALUES({', '.join('?' * len(final_keys))});"
+                    self.cursor.executemany(query, [tuple(entry[k] for k in final_keys) for entry in parsed])
 
         self._builds_init()
 
@@ -536,16 +545,31 @@ class LlamaBenchDataCSV(LlamaBenchDataSQLite3):
 
         for data_file in data_files:
             with open(data_file, "r", encoding="utf-8") as fp:
-                for i, parsed in enumerate(csv.DictReader(fp)):
-                    keys = set(parsed.keys())
+                reader = csv.DictReader(fp)
 
-                    for k in keys - set(db_fields):
-                        del parsed[k]
+                try:
+                    first_row = next(reader)
+                except StopIteration:
+                    continue
 
-                    if (missing_keys := self._check_keys(keys)):
-                        raise RuntimeError(f"Missing required data key(s) at line {i + 1}: {', '.join(missing_keys)}")
+                keys = set(first_row.keys())
+                for k in keys - set(db_fields):
+                    del first_row[k]
 
-                    self.cursor.execute(f"INSERT INTO {self.table_name}({', '.join(parsed.keys())}) VALUES({', '.join('?' * len(parsed))});", tuple(parsed.values()))
+                if (missing_keys := self._check_keys(first_row.keys())):
+                    raise RuntimeError(f"Missing required data key(s) at line 2: {', '.join(missing_keys)}")
+
+                final_keys = list(first_row.keys())
+                query = f"INSERT INTO {self.table_name}({', '.join(final_keys)}) VALUES({', '.join('?' * len(final_keys))});"
+
+                def row_generator():
+                    yield tuple(first_row.values())
+                    for i, parsed in enumerate(reader):
+                        if (missing_keys := self._check_keys(parsed.keys())):
+                            raise RuntimeError(f"Missing required data key(s) at line {i + 3}: {', '.join(missing_keys)}")
+                        yield tuple(parsed[k] for k in final_keys)
+
+                self.cursor.executemany(query, row_generator())
 
         self._builds_init()
 
