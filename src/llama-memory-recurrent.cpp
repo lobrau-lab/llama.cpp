@@ -233,7 +233,11 @@ bool llama_memory_recurrent::seq_rm(llama_seq_id seq_id, llama_pos p0, llama_pos
             if (seq_id < 0) {
                 cells[i].seq_id.clear();
             } else if (cells[i].has_seq_id(seq_id)) {
-                cells[i].seq_id.erase(seq_id);
+                auto it = cells[i].seq_id.begin();
+                    while (it != cells[i].seq_id.end()) {
+                        if (*it == seq_id) it = cells[i].seq_id.erase(it);
+                        else ++it;
+                    }
             } else {
                 continue;
             }
@@ -279,7 +283,11 @@ void llama_memory_recurrent::seq_cp(llama_seq_id seq_id_src, llama_seq_id seq_id
             // clear destination seq_id if it wasn't empty
             auto & cell_dst = cells[tail_dst.tail];
 
-            cell_dst.seq_id.erase(seq_id_dst);
+            auto it = cell_dst.seq_id.begin();
+                    while (it != cell_dst.seq_id.end()) {
+                        if (*it == seq_id_dst) it = cell_dst.seq_id.erase(it);
+                        else ++it;
+                    }
             tail_dst.tail = -1;
             if (cell_dst.seq_id.empty()) {
                 cell_dst.pos = -1;
@@ -290,7 +298,7 @@ void llama_memory_recurrent::seq_cp(llama_seq_id seq_id_src, llama_seq_id seq_id
         if (tail_src.tail >= 0) {
             auto & cell_src = cells[tail_src.tail];
 
-            cell_src.seq_id.insert(seq_id_dst);
+            if (!cell_src.has_seq_id(seq_id_dst)) cell_src.seq_id.push_back(seq_id_dst);
             tail_dst.tail = tail_src.tail;
         }
     }
@@ -318,7 +326,7 @@ void llama_memory_recurrent::seq_keep(llama_seq_id seq_id) {
             }
         } else {
             cells[i].seq_id.clear();
-            cells[i].seq_id.insert(seq_id);
+            if (!cells[i].has_seq_id(seq_id)) cells[i].seq_id.push_back(seq_id);
         }
     }
 
@@ -551,7 +559,11 @@ bool llama_memory_recurrent::find_slot(const llama_ubatch & ubatch) {
                     auto & cell = cells[seq.tail];
                     // clear cells from seq_ids that become shared
                     // (should not normally happen, but let's handle it anyway)
-                    cell.seq_id.erase(seq_id);
+                    auto it = cell.seq_id.begin();
+                    while (it != cell.seq_id.end()) {
+                        if (*it == seq_id) it = cell.seq_id.erase(it);
+                        else ++it;
+                    }
                     seq.tail = -1;
                     if (cell.seq_id.empty()) {
                         cell.pos = -1;
@@ -614,8 +626,12 @@ bool llama_memory_recurrent::find_slot(const llama_ubatch & ubatch) {
                 auto & orig_cell = cells[seq_meta.tail];
                 empty_cell.pos = orig_cell.pos;
                 empty_cell.src = orig_cell.src;
-                orig_cell.seq_id.erase(seq_id);
-                empty_cell.seq_id.insert(seq_id); // will be overwritten
+                auto it = orig_cell.seq_id.begin();
+                    while (it != orig_cell.seq_id.end()) {
+                        if (*it == seq_id) it = orig_cell.seq_id.erase(it);
+                        else ++it;
+                    }
+                if (!empty_cell.has_seq_id(seq_id)) empty_cell.seq_id.push_back(seq_id); // will be overwritten
                 GGML_ASSERT(!orig_cell.is_empty()); // has at least one remaining seq_id
             }
             seq_meta.tail = next_empty_cell;
@@ -675,7 +691,7 @@ bool llama_memory_recurrent::find_slot(const llama_ubatch & ubatch) {
         cell.seq_id.clear();
         for (int32_t j = 0; j < ubatch.n_seq_id[i]; ++j) {
             const llama_seq_id seq_id = ubatch.seq_id[i][j];
-            cell.seq_id.insert(seq_id);
+            if (!cell.has_seq_id(seq_id)) cell.seq_id.push_back(seq_id);
             cells[seq_id].tail = cell_id;
         }
     }
@@ -1081,7 +1097,7 @@ bool llama_memory_recurrent::state_read_meta(llama_io_read_i & io, uint32_t cell
                     return false;
                 }
 
-                cell.seq_id.insert(seq_id);
+                if (!cell.has_seq_id(seq_id)) cell.seq_id.push_back(seq_id);
 
                 int32_t & tail = cells[seq_id].tail;
                 if (tail != -1) {
@@ -1368,7 +1384,7 @@ int32_t llama_memory_recurrent_context::s_copy(int i) const {
 
     uint32_t idx = 0;
     if (!mem->cells[cell_idx].seq_id.empty()) {
-        const llama_seq_id seq = *mem->cells[cell_idx].seq_id.begin();
+        const llama_seq_id seq = mem->cells[cell_idx].seq_id.front();
         if (seq >= 0 && (size_t) seq < mem->rs_idx.size()) {
             idx = mem->rs_idx[seq];
             // reset rollback idx
