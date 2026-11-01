@@ -92,10 +92,11 @@ public:
         int32_t   src0 = -1; // like src, but only used when setting the inputs (allowing to copy once)
         int32_t   tail = -1;
 
-        std::set<llama_seq_id> seq_id;
+        std::vector<llama_seq_id> seq_id;
 
         bool has_seq_id(const llama_seq_id & id) const {
-            return seq_id.find(id) != seq_id.end();
+            for (auto i : seq_id) if (i == id) return true;
+            return false;
         }
 
         bool is_empty() const {
