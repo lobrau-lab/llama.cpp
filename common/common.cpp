@@ -1096,7 +1096,7 @@ bool tty_enable_ansi() {
 //
 
 // TODO: move to common/sampling
-static void common_init_sampler_from_model(
+static void common_sampler_params_init_from_model(
     const llama_model * model,
     common_params_sampling & sparams) {
 
@@ -1360,8 +1360,7 @@ common_init_result::common_init_result(common_params & params, bool model_only) 
     }
 
     // updates params.sampling
-    // TODO: fix naming
-    common_init_sampler_from_model(model, params.sampling);
+    common_sampler_params_init_from_model(model, params.sampling);
 
     if (params.sampling.ignore_eos && llama_vocab_eos(vocab) == LLAMA_TOKEN_NULL) {
         COM_WRN("%s", "vocab does not have an EOS token, ignoring --ignore-eos\n");
