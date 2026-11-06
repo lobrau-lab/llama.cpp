@@ -9,6 +9,9 @@
 #endif
 
 #include "ggml-backend.h"
+#include <mutex>
+#include <unordered_set>
+#include <string>
 #include "ggml-backend-impl.h"
 #include "ggml-alloc.h"
 #include "ggml-impl.h"
@@ -976,6 +979,8 @@ struct ggml_backend_sched {
     size_t context_buffer_size;
 
     bool op_offload;
+    bool fallback_strict;
+    bool fallback_warn;
 
     int debug;
 
@@ -1438,6 +1443,20 @@ void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgra
         // if the node is still unassigned, assign it to the first backend that supports it
         for (int b = 0; b < sched->n_backends && *cur_backend_id == -1; b++) {
             ggml_backend_sched_set_if_supported(sched, node, b, cur_backend_id);
+        }
+        if (*cur_backend_id == sched->n_backends - 1 && sched->n_backends > 1 && !(node->flags & GGML_TENSOR_FLAG_INPUT)) {
+            static std::unordered_set<std::string> warned_ops;
+            static std::mutex warned_ops_mutex;
+            std::string op_name = ggml_op_name(node->op);
+            if (sched->fallback_strict) {
+                GGML_ABORT("fallback_strict: op %s assigned to fallback backend %s", op_name.c_str(), ggml_backend_name(sched->backends[*cur_backend_id]));
+            } else if (sched->fallback_warn && ([&]() { std::lock_guard<std::mutex> lock(warned_ops_mutex); return warned_ops.find(op_name) == warned_ops.end(); })()) {
+                GGML_LOG_WARN("fallback_warn: op %s assigned to fallback backend %s\n", op_name.c_str(), ggml_backend_name(sched->backends[*cur_backend_id]));
+                {
+                std::lock_guard<std::mutex> lock(warned_ops_mutex);
+                warned_ops.insert(op_name);
+                }
+            }
         }
         GGML_ASSERT(*cur_backend_id != -1);
     }
@@ -2012,6 +2031,8 @@ ggml_backend_sched_t ggml_backend_sched_new(
 
     sched->galloc = ggml_gallocr_new_n(sched->bufts, n_backends);
     sched->op_offload = op_offload;
+    sched->fallback_strict = false;
+    sched->fallback_warn = false;
 
     ggml_backend_sched_reset(sched);
 
@@ -2628,4 +2649,12 @@ static ggml_backend_buffer_type_t ggml_backend_cpu_buffer_from_ptr_type(void) {
 ggml_backend_buffer_t ggml_backend_cpu_buffer_from_ptr(void * ptr, size_t size) {
     GGML_ASSERT((uintptr_t)ptr % TENSOR_ALIGNMENT == 0 && "buffer pointer must be aligned");
     return ggml_backend_buffer_init(ggml_backend_cpu_buffer_from_ptr_type(), ggml_backend_cpu_buffer_from_ptr_i, ptr, size);
+}
+
+void ggml_backend_sched_set_fallback_strict(ggml_backend_sched_t sched, bool strict) {
+    sched->fallback_strict = strict;
+}
+
+void ggml_backend_sched_set_fallback_warn(ggml_backend_sched_t sched, bool warn) {
+    sched->fallback_warn = warn;
 }

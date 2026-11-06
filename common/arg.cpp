@@ -1802,6 +1802,20 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_env("LLAMA_ARG_PERF"));
     add_opt(common_arg(
+        {"--fallback-strict"},
+        "trigger an abort if a GPU backend falls back to CPU (default: false)",
+        [](common_params & params) {
+            params.fallback_strict = true;
+        }
+    ).set_env("LLAMA_ARG_FALLBACK_STRICT"));
+    add_opt(common_arg(
+        {"--fallback-warn"},
+        "print a warning if a GPU backend falls back to CPU (default: false)",
+        [](common_params & params) {
+            params.fallback_warn = true;
+        }
+    ).set_env("LLAMA_ARG_FALLBACK_WARN"));
+    add_opt(common_arg(
         {"--show-timings"},
         {"--no-show-timings"},
         string_format("whether to show timing information after each response (default: %s)", params.show_timings ? "true" : "false"),
