@@ -212,6 +212,8 @@ llama_context::llama_context(
     cparams.embeddings_nextn_masked = false;
     cparams.offload_kqv             = params.offload_kqv;
     cparams.no_perf                 = params.no_perf;
+    cparams.fallback_strict         = params.fallback_strict;
+    cparams.fallback_warn           = params.fallback_warn;
     cparams.warmup                  = false;
 
     // +1: id n_layer() taps the output of the last layer ("input" of the head)
@@ -727,6 +729,8 @@ void llama_context::sched_new(size_t max_nodes, bool parallel) {
 
     ggml_backend_sched_set_copy_callback(sched.get(), sched_copy_experts, this);
     ggml_backend_sched_set_realloc_callback(sched.get(), sched_graph_realloc, this);
+    ggml_backend_sched_set_fallback_strict(sched.get(), cparams.fallback_strict);
+    ggml_backend_sched_set_fallback_warn(sched.get(), cparams.fallback_warn);
 }
 
 void llama_context::sched_reserve() {
@@ -4030,6 +4034,8 @@ llama_context_params llama_context_default_params() {
         /*.embeddings                  =*/ false,
         /*.offload_kqv                 =*/ true,
         /*.no_perf                     =*/ true,
+        /*.fallback_strict             =*/ false,
+        /*.fallback_warn               =*/ false,
         /*.op_offload                  =*/ true,
         /*.swa_full                    =*/ true,
         /*.kv_unified                  =*/ false,

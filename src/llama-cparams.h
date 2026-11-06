@@ -51,6 +51,8 @@ struct llama_cparams {
     bool fused_top_k_mask;   // use fused top-k sparse attention mask
     bool auto_ftkm;
     bool no_perf;
+    bool fallback_strict;
+    bool fallback_warn;
     bool warmup;             // TODO: remove [TAG_LLAMA_GRAPH_NO_WARMUP]
     bool op_offload;
     bool kv_unified;
